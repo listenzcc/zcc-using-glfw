@@ -52,7 +52,19 @@ class TextAnchor(Enum):
     B = 8
 
 
-class GLFWWindow:
+class CursorPosition:
+    _cursor_pos = (0, 0)
+
+    @property
+    def cursor_pos(self):
+        return self._cursor_pos
+
+    @cursor_pos.setter
+    def cursor_pos(self, xy):
+        self._cursor_pos = xy
+
+
+class GLFWWindow(CursorPosition):
     # Monitor params (Read-only)
     width: int
     height: int
@@ -70,6 +82,7 @@ class GLFWWindow:
     fps = FPSRuler()
 
     def __init__(self):
+        super().__init__()
         pass
 
     def load_font(self, font_path: str, font_size: int = 48):
@@ -86,7 +99,9 @@ class GLFWWindow:
         return
 
     def update_window_attributes(self):
-        # 当窗口无焦点时自动启用点击穿透
+        '''
+        当窗口无焦点时自动启用点击穿透
+        '''
         auto_click_through = not self.is_focused
         final_click_through = self.click_through or auto_click_through
 
@@ -98,7 +113,7 @@ class GLFWWindow:
 
         return
 
-    def render_loop(self, key_callback: callable, main_render: callable):
+    def init_window(self):
         if not glfw.init():
             raise RuntimeError('Failed initialize GLFW')
 
@@ -124,7 +139,7 @@ class GLFWWindow:
         glfw.window_hint(glfw.FLOATING, glfw.TRUE)  # 置顶窗口
 
         # 设置点击穿透
-        # glfw.window_hint(glfw.MOUSE_PASSTHROUGH, glfw.TRUE)
+        glfw.window_hint(glfw.MOUSE_PASSTHROUGH, glfw.TRUE)
 
         # Leave out 1 pixel to prevent from crashing. But don't know why.
         window = glfw.create_window(
@@ -136,49 +151,60 @@ class GLFWWindow:
 
         self.window = window
 
+        return window
+
+    def render_top_bar(self):
+        scale = 0.5
+        color = (1.0, 1.0, 1.0, 1.0)
+
+        text = f"GLFW ({glfw.__version__}) is Rendering at {self.width} x {self.height} ({self.refresh_rate} Hz)"
+        self.draw_text(text, 0, 1.0, scale, TextAnchor.TL, color)
+
+        text = '窗口获得焦点' if self.is_focused else '窗口失去焦点'
+        self.draw_text(text, 0.5, 1.0, scale, TextAnchor.T, color)
+
+        text = ' | '.join([
+            '-',
+            f'FPS: {self.fps.get_fps():.2f}'
+        ])
+        self.draw_text(text, 1.0, 1.0, scale, TextAnchor.TR, color)
+        return
+
+    def render_loop(self, main_render: callable):
+        window = self.window
+
         # Make context and set callbacks.
         glfw.make_context_current(window)
         glfw.set_window_focus_callback(window, self.on_focus_change)
-        glfw.set_key_callback(window, key_callback)
-        # self.update_window_attributes()
+        self.update_window_attributes()
 
         # 设置混合模式以实现透明度
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-        # Main render
-        fps = self.fps
+        # Main rendering loop
         while not glfw.window_should_close(window):
             # 设置透明背景
             glClearColor(0.0, 0.0, 0.0, 0.0)
             glClear(GL_COLOR_BUFFER_BIT)
 
-            scale = 0.5
-            color = (1.0, 1.0, 1.0, 1.0)
-
-            text = f"GLFW ({glfw.__version__}) is Rendering at {width} x {height} ({refresh_rate} Hz)"
-            self.draw_text(text, 0, 1.0, scale, TextAnchor.TL, color)
-
-            text = '窗口获得焦点' if self.is_focused else '窗口失去焦点'
-            self.draw_text(text, 0.5, 1.0, scale, TextAnchor.T, color)
-
-            text = ' | '.join([
-                '-',
-                f'FPS: {fps.get_fps():.2f}'
-            ])
-            self.draw_text(text, 1.0, 1.0, scale, TextAnchor.TR, color)
-
+            # Run the main_render() for custom rendering.
             main_render()
 
+            # Draw the top bar.
+            self.render_top_bar()
+
+            # Just draw the buffer.
             glfw.swap_buffers(window)
             try:
                 glfw.poll_events()
-            except Exception as e:
-                print(e)
-                raise e
-            fps.update()
+                self.fps.update()
+            except Exception as err:
+                logger.exception(err)
+                raise err
 
         glfw.terminate()
+        logger.info('Rendering stops')
         return
 
     def draw_rect(self, x, y, w, h, color=(1, 1, 1, 1)):
@@ -207,7 +233,7 @@ class GLFWWindow:
         glEnd()
         return
 
-    def draw_text(self, text, x, y, scale, anchor: TextAnchor, color=(1.0, 1.0, 1.0, 1.0)):
+    def draw_text(self, text, x, y, scale, anchor: TextAnchor = TextAnchor.BL, color=(1.0, 1.0, 1.0, 1.0)):
         '''
         The text is actually drawn by pixel units.
 
