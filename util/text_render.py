@@ -28,6 +28,9 @@ from collections import OrderedDict
 # %% ---- 2025-10-09 ------------------------
 # Function and class
 class TextRenderer:
+    # I believe windows should have it
+    default_font_path = 'c:\\windows\\fonts\\msyh.ttc'
+
     def __init__(self, max_cache_size=1024):
         self.face = None
         self.characters = OrderedDict()  # 使用有序字典实现LRU缓存
@@ -37,7 +40,12 @@ class TextRenderer:
         """初始化字体"""
         self.face = freetype.Face(font_path)
         self.face.set_char_size(size << 6)
+
+        self.default_face = freetype.Face(self.default_font_path)
+        self.default_face.set_char_size(size << 6)
+
         logger.info(f'Using font: {font_path} ({size})')
+        logger.info(f'Using font(default): {self.default_font_path} ({size})')
 
     def load_char(self, char):
         """动态加载单个字符（支持中文字符）"""
@@ -57,11 +65,21 @@ class TextRenderer:
         # 加载新字符
         self.face.load_char(char, freetype.FT_LOAD_RENDER |
                             freetype.FT_LOAD_TARGET_LIGHT)
-        bitmap = self.face.glyph.bitmap
+        face = self.face
+
+        # 检查字体是否支持该字符
+        # Use default_face if it does not.
+        glyph_index = self.face.get_char_index(char)
+        if glyph_index == 0:
+            self.default_face.load_char(char, freetype.FT_LOAD_RENDER |
+                                        freetype.FT_LOAD_TARGET_LIGHT)
+            face = self.default_face
+
+        bitmap = face.glyph.bitmap
 
         # 关键：计算字符的实际边界框
-        glyph = self.face.glyph
-        metrics = self.face.glyph.metrics
+        glyph = face.glyph
+        metrics = face.glyph.metrics
 
         # 计算实际高度信息
         actual_height = bitmap.rows
@@ -111,14 +129,15 @@ class TextRenderer:
             'char': char,
             'texture': texture,
             'size': (bitmap.width, bitmap.rows),
-            'bearing': (self.face.glyph.bitmap_left, self.face.glyph.bitmap_top),
-            'advance': self.face.glyph.advance.x >> 6,
+            'bearing': (face.glyph.bitmap_left, face.glyph.bitmap_top),
+            'advance': face.glyph.advance.x >> 6,
             'actual_height': actual_height,
             'bearing_y': bearing_y,
             'descender': descender,
             'bbox_height': actual_bbox_height,
             'horiBearingY': metrics.horiBearingY >> 6,  # 基线到字符顶部的距离
             'height': metrics.height >> 6,  # 字符总高度
+            'glyph_index': glyph_index
         }
 
         # 将新字符移到最前面

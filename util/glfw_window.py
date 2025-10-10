@@ -18,13 +18,16 @@ Functions:
 
 # %% ---- 2025-10-09 ------------------------
 # Requirements and constants
-from .easy_import import *
-from .text_render import TextRenderer
 from .fps_ruler import FPSRuler
+from .text_render import TextRenderer
+from .color_transfer import ColorTransfer
+from .easy_import import *
 
 import glfw
 from enum import Enum
 from OpenGL.GL import *
+
+# %%
 
 # %% ---- 2025-10-09 ------------------------
 # Function and class
@@ -213,8 +216,7 @@ class GLFWWindow(CursorPosition):
 
         :param x, y, w, h: (0, 1) position and (0, 1) scale.
         '''
-        if isinstance(color, float):
-            color = (color, color, color, color)
+        color = ColorTransfer(color).rgba
 
         x = x * 2 - 1
         y = y * 2 - 1
@@ -240,8 +242,7 @@ class GLFWWindow(CursorPosition):
         :param x: (0, 1) position.
         :param y: (0, 1) position.
         '''
-        if isinstance(color, float):
-            color = (color, color, color, color)
+        color = ColorTransfer(color).rgba
 
         x = int(x * self.width)
         y = int(y * self.height)
