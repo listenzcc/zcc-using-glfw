@@ -245,7 +245,7 @@ class GLFWWindow(CursorPosition):
 
         x = int(x * self.width)
         y = int(y * self.height)
-        w, h = self.text_renderer.bounding_box(text, scale)
+        w, h, h2 = self.text_renderer.bounding_box(text, scale)
 
         if anchor == TextAnchor.BL:
             pass
@@ -271,7 +271,7 @@ class GLFWWindow(CursorPosition):
             x -= w
 
         self.text_renderer.render_text(text, x, y, scale, color)
-        return w, h
+        return w, h, h2
 
 # %% ---- 2025-10-09 ------------------------
 # Play ground

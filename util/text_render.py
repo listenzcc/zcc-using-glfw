@@ -44,7 +44,7 @@ class TextRenderer:
         # 如果字符已在缓存中，移到最前面表示最近使用
         if char in self.characters:
             self.characters.move_to_end(char)
-            return True
+            return self.characters[char]
 
         # 如果缓存已满，移除最久未使用的字符
         if len(self.characters) >= self.max_cache_size:
@@ -58,6 +58,20 @@ class TextRenderer:
         self.face.load_char(char, freetype.FT_LOAD_RENDER |
                             freetype.FT_LOAD_TARGET_LIGHT)
         bitmap = self.face.glyph.bitmap
+
+        # 关键：计算字符的实际边界框
+        glyph = self.face.glyph
+        metrics = self.face.glyph.metrics
+
+        # 计算实际高度信息
+        actual_height = bitmap.rows
+        bearing_y = glyph.bitmap_top
+        descender = actual_height - bearing_y  # 下降部分
+
+        # 从字形度量获取更精确的信息
+        bbox_height = (metrics.horiBearingY + metrics.height -
+                       metrics.horiBearingY) >> 6
+        actual_bbox_height = bbox_height
 
         # 将单通道位图转换为RGBA格式
 
@@ -94,30 +108,49 @@ class TextRenderer:
 
         # 存储字符信息
         self.characters[char] = {
+            'char': char,
             'texture': texture,
             'size': (bitmap.width, bitmap.rows),
             'bearing': (self.face.glyph.bitmap_left, self.face.glyph.bitmap_top),
-            'advance': self.face.glyph.advance.x >> 6
+            'advance': self.face.glyph.advance.x >> 6,
+            'actual_height': actual_height,
+            'bearing_y': bearing_y,
+            'descender': descender,
+            'bbox_height': actual_bbox_height,
+            'horiBearingY': metrics.horiBearingY >> 6,  # 基线到字符顶部的距离
+            'height': metrics.height >> 6,  # 字符总高度
         }
 
         # 将新字符移到最前面
         self.characters.move_to_end(char, last=False)
         logger.info(f'Loaded character: {char}, {self.characters[char]}')
-        return True
+        return self.characters[char]
 
     def bounding_box(self, text, scale=1.0):
-        """计算文本的边界框"""
+        """
+        计算文本的边界框
+
+        The (width, height) gives the bounding box of the text.
+        The (width, height2) gives the real range of the text, which contains the descender of each char.
+
+        :param text str: the input text.
+        :param scale float: the scale factor.
+
+        :return width int: the width of the input text.
+        :return height int: the height of the input text, it shows the bottom line of the string.
+        :return height2 int: the real height of the input text, it contains the descender of each char.
+        """
         width = 0
         height = 0
+        height2 = 0
         for char in text:
-            if char not in self.characters:
-                self.load_char(char)
-
-            ch = self.characters[char]
+            ch = self.load_char(char)
             width += ch['advance'] * scale
-            height = max(height, ch['size'][1] * scale)
+            height = max(height, ch['bbox_height'] * scale)
+            height2 = max(
+                height2, (ch['bbox_height'] + ch['descender']) * scale)
 
-        return width, height
+        return width, height, height2
 
     def render_text(self, text, x, y, scale=1.0, color=(1.0, 1.0, 1.0, 1.0)):
         '''

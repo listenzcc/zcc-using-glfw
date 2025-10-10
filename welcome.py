@@ -43,19 +43,25 @@ def cursor_pos_callback(window, x, y):
 
 
 def main_render():
-    omega = 0.1 * 2 * math.pi
+    omega = 0.2 * 2 * math.pi
     t = glfw.get_time()
     c = (math.sin(t*omega) + 1)/2
-    # c = min(c, 0.3)
+    face_color = (c, c, c, 0.5)
+    text_color = (1, 1, 1, 1)
 
     x, y = wnd.cursor_pos
     x /= wnd.width
     y /= wnd.height
     y = 1-y
 
-    wnd.draw_text(f'{x=:0.3f}, {y=:0.3f}', x, y, scale=0.5)
-    wnd.draw_rect(0, 0, x, y, c)
-    wnd.draw_text(f'{t=:0.3f}', 0, 0, scale=0.5, color=(1, 0, 0, 1))
+    wnd.draw_rect(0, 0, x, y, face_color)
+    w, _, h = wnd.draw_text(f'{x=:0.3f}, {y=:0.3f}', x, y,
+                            scale=0.5, anchor=TextAnchor.TR, color=text_color)
+    w /= wnd.width
+    h /= wnd.height
+    wnd.draw_rect(x-w, y-h, w, 1/wnd.height, (0, 0, 0, 1))
+    wnd.draw_rect(x-w, y-h, 1/wnd.width, h, (0, 0, 0, 1))
+    wnd.draw_text(f'{t=:0.3f}', 0, 0, scale=0.5, color=text_color)
     pass
 
 
