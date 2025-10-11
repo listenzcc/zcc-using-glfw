@@ -142,7 +142,7 @@ class TextRenderer:
 
         # 将新字符移到最前面
         self.characters.move_to_end(char, last=False)
-        logger.info(f'Loaded character: {char}, {self.characters[char]}')
+        logger.debug(f'Loaded character: {char}, {self.characters[char]}')
         return self.characters[char]
 
     def bounding_box(self, text, scale=1.0):
