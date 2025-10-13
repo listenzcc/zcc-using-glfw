@@ -37,6 +37,14 @@ MC = MyColors()
 PROMPT_COLOR = random.choice(WC.class_colors['hex'])
 TEXT_QUEUE = Queue(maxsize=50)
 
+WELCOME_MSG = '''
+Welcome to my GLFW window.
+
+The blinking square's NE corner is on cursor.
+And press key for popping and lifting texts.
+It also changes the text color.
+'''
+
 # %% ---- 2025-10-09 ------------------------
 # Function and class
 
@@ -155,6 +163,16 @@ def main_render():
     c *= 0.5
     face_color = (c, c, c, 0.5)
 
+    # Draw the welcome message
+    x = 1.0
+    y = 0.8
+    for text in WELCOME_MSG.split('\n'):
+        if len(text) == 0:
+            text = '\n'
+        w, _, h = wnd.draw_text(text, x, y, scale=0.5,
+                                anchor=TextAnchor.BR, color=PROMPT_COLOR)
+        y -= h/wnd.height
+
     # Draw the top right corner prompt
     x, y = wnd.cursor_pos
     text = f'{x=: 4.0f}, {y=: 4.0f}'
@@ -189,9 +207,7 @@ def main_render():
 # %% ---- 2025-10-09 ------------------------
 # Play ground
 wnd = GLFWWindow()
-# wnd.load_font('c:\\windows\\fonts\\mtcorsva.ttf', FONT_SIZE)
 wnd.load_font('c:\\windows\\fonts\\stliti.ttf', FONT_SIZE)
-# wnd.load_font('c:\\windows\\fonts\\stxinwei.ttf', FONT_SIZE)
 wnd.init_window()
 
 glfw.set_key_callback(wnd.window, key_callback)
