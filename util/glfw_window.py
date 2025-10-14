@@ -161,7 +161,7 @@ class GLFWWindow(CursorPosition):
         glfw.make_context_current(window)
 
         self.window = window
-        self.text_renderer.setup_buffers(self.width, self.height)
+        self.text_renderer.init_shader(self.width, self.height)
 
         return window
 
@@ -170,10 +170,10 @@ class GLFWWindow(CursorPosition):
         color = (1.0, 1.0, 1.0, 1.0)
 
         text = f"GLFW ({glfw.__version__}) is Rendering at {self.width} x {self.height} ({self.refresh_rate} Hz)"
-        self.draw_text(text, 0, 1.0, scale, TextAnchor.TL, color)
+        self.draw_text(text, -1.0, 1.0, scale, TextAnchor.TL, color)
 
         text = '窗口获得焦点' if self.is_focused else '窗口失去焦点'
-        self.draw_text(text, 0.5, 1.0, scale, TextAnchor.T, color)
+        self.draw_text(text, 0, 1.0, scale, TextAnchor.T, color)
 
         text = ' | '.join([
             '-',
@@ -225,6 +225,8 @@ class GLFWWindow(CursorPosition):
 
         :param x, y, w, h: (0, 1) position and (0, 1) scale.
         '''
+        raise DeprecationWarning('Not using instance mode anymore.')
+
         color = ColorTransfer(color).rgba
 
         x = x * 2 - 1
@@ -248,13 +250,15 @@ class GLFWWindow(CursorPosition):
         '''
         The text is actually drawn by pixel units.
 
-        :param x: (0, 1) position.
-        :param y: (0, 1) position.
+        :param x: (-1, 1) position.
+        :param y: (-1, 1) position.
         '''
         color = ColorTransfer(color).rgba
 
-        x = int(x * self.width)
-        y = int(y * self.height)
+        x = int((x+1) * 0.5 * self.width)
+        y = int((y+1) * 0.5 * self.height)
+        # x = int(x * self.width)
+        # y = int(y * self.height)
         w, h, h2 = self.text_renderer.bounding_box(text, scale)
 
         if anchor == TextAnchor.BL:

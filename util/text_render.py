@@ -31,11 +31,8 @@ vertex_shader_source = """
 #version 330 core
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec2 aTexCoord;
-
 out vec2 TexCoord;
-
 uniform mat4 projection;
-
 void main()
 {
     gl_Position = projection * vec4(aPos, 0.0, 1.0);
@@ -48,14 +45,14 @@ fragment_shader_source = """
 #version 330 core
 in vec2 TexCoord;
 out vec4 FragColor;
-
 uniform sampler2D textTexture;
 uniform vec3 textColor;
-
 void main()
 {
-    vec4 sampled = vec4(1.0, 1.0, 1.0, texture(textTexture, TexCoord).r);
-    FragColor = vec4(textColor, 1.0) * sampled;
+    // vec4 sampled = vec4(1.0, 1.0, 1.0, texture(textTexture, TexCoord).r);
+    // FragColor = vec4(textColor, 1.0) * sampled;
+    float alpha = texture(textTexture, TexCoord).r;
+    FragColor = vec4(textColor, alpha);
 }
 """
 
@@ -63,14 +60,23 @@ void main()
 # Function and class
 
 
-class ShaderTextRender:
+class TextShader:
     def __init__(self):
         pass
 
-    def setup_buffers(self, w, h):
-        self.width = w
-        self.height = h
+    def init_shader(self, width, height):
+        self.width = width
+        self.height = height
 
+        # 设置投影矩阵
+        self.projection = np.array([
+            [2.0/self.width, 0.0, 0.0, 0.0],
+            [0.0, 2.0/self.height, 0.0, 0.0],
+            [0.0, 0.0, -1.0, 0.0],
+            [-1.0, -1.0, 0.0, 1.0]
+        ], dtype=np.float32)
+
+        # Compile shaders
         vertex_shader = compileShader(vertex_shader_source, GL_VERTEX_SHADER)
         fragment_shader = compileShader(
             fragment_shader_source, GL_FRAGMENT_SHADER)
@@ -100,68 +106,12 @@ class ShaderTextRender:
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glBindVertexArray(0)
 
-    def render_text(self, text, x, y, scale=1.0, color=(1.0, 1.0, 1.0, 1.0)):
-        print(text, x, y, scale, color)
-        glUseProgram(self.shader_program)
-        glUniform3f(glGetUniformLocation(self.shader_program,
-                    "textColor"), color[0], color[1], color[2])
 
-        # 设置正交投影矩阵
-        projection = np.array([
-            [2.0/self.width, 0.0, 0.0, 0.0],
-            [0.0, 2.0/self.height, 0.0, 0.0],
-            [0.0, 0.0, -1.0, 0.0],
-            [-1.0, -1.0, 0.0, 1.0]
-        ], dtype=np.float32)
-
-        glUniformMatrix4fv(glGetUniformLocation(
-            self.shader_program, "projection"), 1, GL_FALSE, projection)
-
-        glActiveTexture(GL_TEXTURE0)
-        glBindVertexArray(self.vao)
-
-        # 为整个文本准备顶点数据
-        vertices = []
-
-        for char in text:
-            self.load_char(char)
-            ch = self.characters[char]
-
-            xpos = x + ch['bearing'][0] * scale
-            ypos = y - (ch['size'][1] - ch['bearing'][1]) * scale
-            w = ch['size'][0] * scale
-            h = ch['size'][1] * scale
-
-            # 每个字符的6个顶点（2个三角形组成四边形）
-            # 三角形1
-            vertices.extend([xpos,     ypos + h,   0.0, 0.0])  # 左下
-            vertices.extend([xpos + w, ypos,       1.0, 1.0])  # 右上
-            vertices.extend([xpos,     ypos,       0.0, 1.0])  # 左上
-
-            # 三角形2
-            vertices.extend([xpos,     ypos + h,   0.0, 0.0])  # 左下
-            vertices.extend([xpos + w, ypos + h,   1.0, 0.0])  # 右下
-            vertices.extend([xpos + w, ypos,       1.0, 1.0])  # 右上
-
-            x += ch['advance'] * scale
-
-        # 上传顶点数据到 GPU
-        vertices = np.array(vertices, dtype=np.float32)
-        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
-        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.nbytes, vertices)
-
-        # 绘制所有字符
-        glBindTexture(GL_TEXTURE_2D, ch['texture'])  # 绑定最后一个字符的纹理
-        glDrawArrays(GL_TRIANGLES, 0, len(vertices) // 4)
-
-        glBindVertexArray(0)
-        glBindTexture(GL_TEXTURE_2D, 0)
-        return
-
-
-class TextRenderer(ShaderTextRender):
-    # I believe windows should have it
+class TextRenderer(TextShader):
+    # I believe windows should have it.
+    # And I believe it has every char I want.
     default_font_path = 'c:\\windows\\fonts\\msyh.ttc'
+    default_font_size = 24
 
     def __init__(self, max_cache_size=1024):
         super().__init__()
@@ -169,8 +119,11 @@ class TextRenderer(ShaderTextRender):
         self.characters = OrderedDict()  # 使用有序字典实现LRU缓存
         self.max_cache_size = max_cache_size  # 最大缓存字符数
 
-    def load_font(self, font_path, size):
+    def load_font(self, font_path, size=None):
         """初始化字体"""
+        if size is None:
+            size = self.default_font_size
+
         self.face = freetype.Face(font_path)
         self.face.set_char_size(size << 6)
 
@@ -181,92 +134,52 @@ class TextRenderer(ShaderTextRender):
         logger.info(f'Using font(default): {self.default_font_path} ({size})')
 
     def load_char(self, char):
-        """动态加载单个字符（支持中文字符）"""
-        # 如果字符已在缓存中，移到最前面表示最近使用
         if char in self.characters:
-            self.characters.move_to_end(char)
             return self.characters[char]
 
-        # 如果缓存已满，移除最久未使用的字符
-        if len(self.characters) >= self.max_cache_size:
-            oldest_char = next(iter(self.characters))
-            glDeleteTextures([self.characters[oldest_char]['texture']])
-            del self.characters[oldest_char]
-            logger.warning(
-                f'Characters cache exceeds limit, removed: {oldest_char}')
-
-        # 加载新字符
-        self.face.load_char(char, freetype.FT_LOAD_RENDER |
-                            freetype.FT_LOAD_TARGET_LIGHT)
-        face = self.face
-
-        # 检查字体是否支持该字符
-        # Use default_face if it does not.
-        glyph_index = self.face.get_char_index(char)
-        if glyph_index == 0:
-            self.default_face.load_char(char, freetype.FT_LOAD_RENDER |
-                                        freetype.FT_LOAD_TARGET_LIGHT)
-            face = self.default_face
-
+        face = self.face if self.face.get_char_index(
+            char) > 0 else self.default_face
+        face.load_char(char, freetype.FT_LOAD_RENDER)
         bitmap = face.glyph.bitmap
-
-        # 关键：计算字符的实际边界框
         glyph = face.glyph
-        metrics = face.glyph.metrics
 
-        # 计算实际高度信息
-        actual_height = bitmap.rows
-        bearing_y = glyph.bitmap_top
-        descender = actual_height - bearing_y  # 下降部分
-
-        # 从字形度量获取更精确的信息
-        bbox_height = (metrics.horiBearingY + metrics.height -
-                       metrics.horiBearingY) >> 6
-        actual_bbox_height = bbox_height
-
-        # 将单通道位图转换为RGBA格式
-        buffer = np.array(bitmap.buffer, dtype=np.uint8).reshape(
-            (bitmap.rows, bitmap.width))
-        rgba_data = np.zeros((bitmap.rows, bitmap.width, 4), dtype=np.uint8)
-        rgba_data[..., :3] = 255  # 设置RGB为白色
-        rgba_data[..., 3] = buffer  # 设置Alpha通道
-        rgba_data = rgba_data.flatten()
-
-        # 生成纹理
         texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, texture)
-        glTexImage2D(
-            GL_TEXTURE_2D, 0, GL_RGBA,
-            bitmap.width, bitmap.rows,
-            0, GL_RGBA, GL_UNSIGNED_BYTE,
-            rgba_data
-        )
 
-        # 设置纹理参数
+        # 重要：单字节对齐，针对宽度不是4的情况
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
+
+        if bitmap.pixel_mode == freetype.FT_PIXEL_MODE_MONO:
+            data = self.mono_to_grayscale(bitmap)
+        else:
+            # 直接构造 numpy array, 注意 shape/类型
+            data = np.array(bitmap.buffer, dtype=np.ubyte)
+
+        # 纹理参数
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
 
-        # 存储字符信息
+        # 上传纹理（单通道）
+        if bitmap.width > 0 and bitmap.rows > 0:
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, bitmap.width,
+                         bitmap.rows, 0, GL_RED, GL_UNSIGNED_BYTE, data)
+        else:
+            empty_data = np.array([0], dtype=np.ubyte)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 1, 1, 0,
+                         GL_RED, GL_UNSIGNED_BYTE, empty_data)
+
+        # 解绑纹理
+        glBindTexture(GL_TEXTURE_2D, 0)
+
         self.characters[char] = {
-            'char': char,
             'texture': texture,
             'size': (bitmap.width, bitmap.rows),
-            'bearing': (face.glyph.bitmap_left, face.glyph.bitmap_top),
-            'advance': face.glyph.advance.x >> 6,
-            'actual_height': actual_height,
-            'bearing_y': bearing_y,
-            'descender': descender,
-            'bbox_height': actual_bbox_height,
-            'horiBearingY': metrics.horiBearingY >> 6,  # 基线到字符顶部的距离
-            'height': metrics.height >> 6,  # 字符总高度
-            'glyph_index': glyph_index
+            'bearing': (glyph.bitmap_left, glyph.bitmap_top),
+            'advance': glyph.advance.x >> 6
         }
 
-        # 将新字符移到最前面
-        self.characters.move_to_end(char, last=False)
-        # logger.debug(f'Loaded character: {char}, {self.characters[char]}')
         return self.characters[char]
 
     def bounding_box(self, text, scale=1.0):
@@ -289,78 +202,91 @@ class TextRenderer(ShaderTextRender):
         for char in text:
             ch = self.load_char(char)
             width += ch['advance'] * scale
-            height = max(height, ch['bbox_height'] * scale)
-            height2 = max(
-                height2, (ch['bbox_height'] + ch['descender']) * scale)
+            height = max(height, ch['size'][1] * scale)
+            # height2 = max(
+            #     height2, (ch['bbox_height'] + ch['descender']) * scale)
+        height2 = height
 
         return width, height, height2
 
-    def render_text_old(self, text, x, y, scale=1.0, color=(1.0, 1.0, 1.0, 1.0)):
-        '''
-        Draw the text at its SW corner.
-        '''
-        # 启用必要的OpenGL状态
-        # glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        glEnable(GL_TEXTURE_2D)
+    def render_text(self, text, x, y, scale=1.0, color=(1.0, 1.0, 1.0)):
+        """
+        Render the text on position x, y.
+        """
+        if not text:
+            return
 
-        # 设置颜色（包含alpha通道）
-        glColor4f(*color)
+        glUseProgram(self.shader_program)
+        glUniform3f(glGetUniformLocation(self.shader_program, "textColor"),
+                    color[0], color[1], color[2])
 
-        # 获取视口尺寸用于坐标转换
-        viewport = glGetIntegerv(GL_VIEWPORT)
-        screen_width = viewport[2]
-        screen_height = viewport[3]
+        glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "projection"),
+                           1, GL_FALSE, self.projection)
 
-        # 设置正交投影
-        glMatrixMode(GL_PROJECTION)
-        glPushMatrix()
-        glLoadIdentity()
-        glOrtho(0, screen_width, 0, screen_height, -1, 1)
+        glActiveTexture(GL_TEXTURE0)
+        glBindVertexArray(self.vao)
 
-        glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
-        glLoadIdentity()
+        # 为整个文本准备顶点数据
+        vertices = []
+        textures_used = []  # 记录使用的纹理和对应的顶点范围
+
+        start_index = 0
 
         for char in text:
             self.load_char(char)
+            if char not in self.characters:
+                continue  # 跳过未加载的字符
 
             ch = self.characters[char]
+
+            # 计算位置
             xpos = x + ch['bearing'][0] * scale
             ypos = y - (ch['size'][1] - ch['bearing'][1]) * scale
-
             w = ch['size'][0] * scale
             h = ch['size'][1] * scale
 
-            # 绑定字符纹理
-            glBindTexture(GL_TEXTURE_2D, ch['texture'])
+            # 跳过完全透明的字符（如空格）
+            if w > 0 and h > 0:
+                # 每个字符的6个顶点（2个三角形）
+                # 三角形1
+                vertices.extend(
+                    [xpos,     ypos + h,   0.0, 0.0])  # 左下
+                vertices.extend([xpos + w, ypos,       1.0, 1.0])  # 右上
+                vertices.extend([xpos,     ypos,       0.0, 1.0])  # 左上
 
-            # 绘制字符
-            glBegin(GL_QUADS)
-            glTexCoord2f(0, 0)
-            glVertex2f(xpos, ypos + h)  # 左下角
+                # 三角形2
+                vertices.extend([xpos,     ypos + h,   0.0, 0.0])  # 左下
+                vertices.extend([xpos + w, ypos + h,   1.0, 0.0])  # 右下
+                vertices.extend([xpos + w, ypos,       1.0, 1.0])  # 右上
 
-            glTexCoord2f(1, 0)
-            glVertex2f(xpos + w, ypos + h)  # 右下角
-
-            glTexCoord2f(1, 1)
-            glVertex2f(xpos + w, ypos)  # 右上角
-
-            glTexCoord2f(0, 1)
-            glVertex2f(xpos, ypos)  # 左上角
-            glEnd()
+                # 记录这个字符使用的纹理和顶点范围
+                end_index = len(vertices) // 4  # 每个顶点4个float
+                textures_used.append({
+                    'texture': ch['texture'],
+                    'start': start_index,
+                    'count': end_index - start_index
+                })
+                start_index = end_index
 
             x += ch['advance'] * scale
 
-        # 恢复矩阵状态
-        glMatrixMode(GL_PROJECTION)
-        glPopMatrix()
-        glMatrixMode(GL_MODELVIEW)
-        glPopMatrix()
+        if vertices:
+            # 上传顶点数据
+            vertices_array = np.array(vertices, dtype=np.float32)
+            glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
+            glBufferSubData(GL_ARRAY_BUFFER, 0,
+                            vertices_array.nbytes, vertices_array)
 
-        # 禁用状态
-        glDisable(GL_TEXTURE_2D)
-        # glDisable(GL_BLEND)
+            # 按纹理分组绘制
+            for texture_info in textures_used:
+                # print(texture_info)
+                glBindTexture(GL_TEXTURE_2D, texture_info['texture'])
+                glDrawArrays(
+                    GL_TRIANGLES, texture_info['start'], texture_info['count'])
+
+        glBindVertexArray(0)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        return
 
 # %% ---- 2025-10-09 ------------------------
 # Play ground

@@ -26,8 +26,6 @@ from OpenGL.GL.shaders import compileProgram, compileShader
 from util.easy_import import *
 from util.glfw_window import GLFWWindow
 
-FONT_SIZE = 48
-
 # %%
 # Setup triangle points
 vertices = np.array([
@@ -102,11 +100,12 @@ def main_render():
     glBindVertexArray(vao)
     glDrawArrays(GL_TRIANGLES, 0, 3)
 
-    wnd.text_renderer.render_text("Hello Modern OpenGL!",
-                                  500, 500, 1.0, (1.0, 0.5, 0.2))
-    wnd.text_renderer.render_text("高性能文本渲染", 500, 500, 1.0, (0.2, 0.8, 1.0))
+    t = glfw.get_time()
 
-    # wnd.draw_rect(0, 0, 0.2, 0.2, color=(0.2, 0.1, 0.1, 0.5))
+    wnd.draw_text("Hello Modern OpenGL!",
+                  math.sin(t), math.cos(t), 1.0, color=(1.0, 0.5, 0.2))
+    wnd.draw_text("高性能文本渲染", -0.5, 0.5, 1.0, color=(0.2, 0.8, 1.0))
+
     return
 
 
@@ -114,7 +113,8 @@ def main_render():
 # Play ground
 
 wnd = GLFWWindow()
-wnd.load_font('c:\\windows\\fonts\stliti.ttf', FONT_SIZE)
+# wnd.load_font('c:\\windows\\fonts\\stliti.ttf', FONT_SIZE)
+wnd.load_font('./resource/font/MTCORSVA.TTF')
 wnd.init_window()
 
 shader, vao = compile()
