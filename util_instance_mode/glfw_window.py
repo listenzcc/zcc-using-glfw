@@ -136,9 +136,9 @@ class GLFWWindow(CursorPosition):
             f'Using primary monitor: {width} x {height} ({refresh_rate} Hz)')
 
         # 请求核心配置文件 for modern mode
-        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-        glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+        # glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+        # glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
+        # glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
         # 配置窗口
         glfw.window_hint(glfw.TRANSPARENT_FRAMEBUFFER, glfw.TRUE)
@@ -161,7 +161,6 @@ class GLFWWindow(CursorPosition):
         glfw.make_context_current(window)
 
         self.window = window
-        self.text_renderer.setup_buffers(self.width, self.height)
 
         return window
 

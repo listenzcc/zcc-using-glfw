@@ -27,8 +27,8 @@ import random
 from queue import Queue
 from threading import Thread, RLock
 
-from util.easy_import import *
-from util.glfw_window import GLFWWindow, TextAnchor
+from util_instance_mode.easy_import import *
+from util_instance_mode.glfw_window import GLFWWindow, TextAnchor
 from color_manager import WowColors, MyColors
 
 FONT_SIZE = 48

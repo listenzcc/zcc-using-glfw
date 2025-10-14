@@ -22,149 +22,16 @@ from .easy_import import *
 
 import freetype
 from OpenGL.GL import *
-from OpenGL.GL.shaders import compileProgram, compileShader
 from collections import OrderedDict
 
-# %%
-# 顶点着色器
-vertex_shader_source = """
-#version 330 core
-layout (location = 0) in vec2 aPos;
-layout (location = 1) in vec2 aTexCoord;
-
-out vec2 TexCoord;
-
-uniform mat4 projection;
-
-void main()
-{
-    gl_Position = projection * vec4(aPos, 0.0, 1.0);
-    TexCoord = aTexCoord;
-}
-"""
-
-# 片段着色器
-fragment_shader_source = """
-#version 330 core
-in vec2 TexCoord;
-out vec4 FragColor;
-
-uniform sampler2D textTexture;
-uniform vec3 textColor;
-
-void main()
-{
-    vec4 sampled = vec4(1.0, 1.0, 1.0, texture(textTexture, TexCoord).r);
-    FragColor = vec4(textColor, 1.0) * sampled;
-}
-"""
 
 # %% ---- 2025-10-09 ------------------------
 # Function and class
-
-
-class ShaderTextRender:
-    def __init__(self):
-        pass
-
-    def setup_buffers(self, w, h):
-        self.width = w
-        self.height = h
-
-        vertex_shader = compileShader(vertex_shader_source, GL_VERTEX_SHADER)
-        fragment_shader = compileShader(
-            fragment_shader_source, GL_FRAGMENT_SHADER)
-        self.shader_program = compileProgram(vertex_shader, fragment_shader)
-
-        # 生成 VAO、VBO
-        self.vao = glGenVertexArrays(1)
-        self.vbo = glGenBuffers(1)
-
-        glBindVertexArray(self.vao)
-        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
-
-        # 预分配缓冲区大小（6个顶点 * 4个float * 100个字符）
-        glBufferData(GL_ARRAY_BUFFER, 6 * 4 * 100 *
-                     sizeof(GLfloat), None, GL_DYNAMIC_DRAW)
-
-        # 设置顶点属性指针
-        # 位置属性
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
-                              4 * sizeof(GLfloat), ctypes.c_void_p(0))
-        glEnableVertexAttribArray(0)
-        # 纹理坐标属性
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 *
-                              sizeof(GLfloat), ctypes.c_void_p(2 * sizeof(GLfloat)))
-        glEnableVertexAttribArray(1)
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0)
-        glBindVertexArray(0)
-
-    def render_text(self, text, x, y, scale=1.0, color=(1.0, 1.0, 1.0, 1.0)):
-        print(text, x, y, scale, color)
-        glUseProgram(self.shader_program)
-        glUniform3f(glGetUniformLocation(self.shader_program,
-                    "textColor"), color[0], color[1], color[2])
-
-        # 设置正交投影矩阵
-        projection = np.array([
-            [2.0/self.width, 0.0, 0.0, 0.0],
-            [0.0, 2.0/self.height, 0.0, 0.0],
-            [0.0, 0.0, -1.0, 0.0],
-            [-1.0, -1.0, 0.0, 1.0]
-        ], dtype=np.float32)
-
-        glUniformMatrix4fv(glGetUniformLocation(
-            self.shader_program, "projection"), 1, GL_FALSE, projection)
-
-        glActiveTexture(GL_TEXTURE0)
-        glBindVertexArray(self.vao)
-
-        # 为整个文本准备顶点数据
-        vertices = []
-
-        for char in text:
-            self.load_char(char)
-            ch = self.characters[char]
-
-            xpos = x + ch['bearing'][0] * scale
-            ypos = y - (ch['size'][1] - ch['bearing'][1]) * scale
-            w = ch['size'][0] * scale
-            h = ch['size'][1] * scale
-
-            # 每个字符的6个顶点（2个三角形组成四边形）
-            # 三角形1
-            vertices.extend([xpos,     ypos + h,   0.0, 0.0])  # 左下
-            vertices.extend([xpos + w, ypos,       1.0, 1.0])  # 右上
-            vertices.extend([xpos,     ypos,       0.0, 1.0])  # 左上
-
-            # 三角形2
-            vertices.extend([xpos,     ypos + h,   0.0, 0.0])  # 左下
-            vertices.extend([xpos + w, ypos + h,   1.0, 0.0])  # 右下
-            vertices.extend([xpos + w, ypos,       1.0, 1.0])  # 右上
-
-            x += ch['advance'] * scale
-
-        # 上传顶点数据到 GPU
-        vertices = np.array(vertices, dtype=np.float32)
-        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
-        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.nbytes, vertices)
-
-        # 绘制所有字符
-        glBindTexture(GL_TEXTURE_2D, ch['texture'])  # 绑定最后一个字符的纹理
-        glDrawArrays(GL_TRIANGLES, 0, len(vertices) // 4)
-
-        glBindVertexArray(0)
-        glBindTexture(GL_TEXTURE_2D, 0)
-        return
-
-
-class TextRenderer(ShaderTextRender):
+class TextRenderer:
     # I believe windows should have it
     default_font_path = 'c:\\windows\\fonts\\msyh.ttc'
 
     def __init__(self, max_cache_size=1024):
-        super().__init__()
         self.face = None
         self.characters = OrderedDict()  # 使用有序字典实现LRU缓存
         self.max_cache_size = max_cache_size  # 最大缓存字符数
@@ -225,6 +92,15 @@ class TextRenderer(ShaderTextRender):
         actual_bbox_height = bbox_height
 
         # 将单通道位图转换为RGBA格式
+
+        # -------------------------
+        # It is Slow.
+        # for i in range(bitmap.rows):
+        #     for j in range(bitmap.width):
+        #         value = bitmap.buffer[i * bitmap.width + j]
+        #         rgba_data.extend([255, 255, 255, value])  # 白色+alpha
+        # -------------------------
+
         buffer = np.array(bitmap.buffer, dtype=np.uint8).reshape(
             (bitmap.rows, bitmap.width))
         rgba_data = np.zeros((bitmap.rows, bitmap.width, 4), dtype=np.uint8)
@@ -266,7 +142,7 @@ class TextRenderer(ShaderTextRender):
 
         # 将新字符移到最前面
         self.characters.move_to_end(char, last=False)
-        # logger.debug(f'Loaded character: {char}, {self.characters[char]}')
+        logger.debug(f'Loaded character: {char}, {self.characters[char]}')
         return self.characters[char]
 
     def bounding_box(self, text, scale=1.0):
@@ -295,7 +171,7 @@ class TextRenderer(ShaderTextRender):
 
         return width, height, height2
 
-    def render_text_old(self, text, x, y, scale=1.0, color=(1.0, 1.0, 1.0, 1.0)):
+    def render_text(self, text, x, y, scale=1.0, color=(1.0, 1.0, 1.0, 1.0)):
         '''
         Draw the text at its SW corner.
         '''
