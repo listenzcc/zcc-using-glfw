@@ -23,6 +23,7 @@ from .easy_import import *
 import freetype
 from OpenGL.GL import *
 from OpenGL.GL.shaders import compileProgram, compileShader
+from OpenGL.GL.shaders import ShaderCompilationError
 from collections import OrderedDict
 
 # %%
@@ -49,8 +50,6 @@ uniform sampler2D textTexture;
 uniform vec3 textColor;
 void main()
 {
-    // vec4 sampled = vec4(1.0, 1.0, 1.0, texture(textTexture, TexCoord).r);
-    // FragColor = vec4(textColor, 1.0) * sampled;
     float alpha = texture(textTexture, TexCoord).r;
     FragColor = vec4(textColor, alpha);
 }
@@ -72,15 +71,20 @@ class TextShader:
         self.projection = np.array([
             [2.0/self.width, 0.0, 0.0, 0.0],
             [0.0, 2.0/self.height, 0.0, 0.0],
-            [0.0, 0.0, -1.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
             [-1.0, -1.0, 0.0, 1.0]
         ], dtype=np.float32)
 
         # Compile shaders
-        vertex_shader = compileShader(vertex_shader_source, GL_VERTEX_SHADER)
-        fragment_shader = compileShader(
-            fragment_shader_source, GL_FRAGMENT_SHADER)
-        self.shader_program = compileProgram(vertex_shader, fragment_shader)
+        try:
+            vertex_shader = compileShader(
+                vertex_shader_source, GL_VERTEX_SHADER)
+            fragment_shader = compileShader(
+                fragment_shader_source, GL_FRAGMENT_SHADER)
+            self.shader_program = compileProgram(
+                vertex_shader, fragment_shader)
+        except ShaderCompilationError as err:
+            raise err
 
         # 生成 VAO、VBO
         self.vao = glGenVertexArrays(1)
@@ -244,31 +248,43 @@ class TextRenderer(TextShader):
             ypos = y - (ch['size'][1] - ch['bearing'][1]) * scale
             w = ch['size'][0] * scale
             h = ch['size'][1] * scale
+            x += ch['advance'] * scale
 
             # 跳过完全透明的字符（如空格）
-            if w > 0 and h > 0:
-                # 每个字符的6个顶点（2个三角形）
-                # 三角形1
-                vertices.extend(
-                    [xpos,     ypos + h,   0.0, 0.0])  # 左下
-                vertices.extend([xpos + w, ypos,       1.0, 1.0])  # 右上
-                vertices.extend([xpos,     ypos,       0.0, 1.0])  # 左上
+            if not all([w > 0, h > 0]):
+                continue
 
-                # 三角形2
-                vertices.extend([xpos,     ypos + h,   0.0, 0.0])  # 左下
-                vertices.extend([xpos + w, ypos + h,   1.0, 0.0])  # 右下
-                vertices.extend([xpos + w, ypos,       1.0, 1.0])  # 右上
+            # 每个字符的6个顶点（2个三角形）
+            # a----b
+            # |1 / |
+            # | / 2|
+            # c----d
+            # But the char on the screen is like
+            # c----d
+            # |2 / |
+            # | / 1|
+            # a----b
+            _vertices = [
+                # Triangle 1
+                [xpos,     ypos + h, 0.0, 0.0],  # c
+                [xpos + w, ypos,     1.0, 1.0],  # b
+                [xpos,     ypos,     0.0, 1.0],  # a
+                # Triangle 2
+                [xpos,     ypos + h, 0.0, 0.0],  # c
+                [xpos + w, ypos + h, 1.0, 0.0],  # d
+                [xpos + w, ypos,     1.0, 1.0],  # b
+            ]
 
-                # 记录这个字符使用的纹理和顶点范围
-                end_index = len(vertices) // 4  # 每个顶点4个float
-                textures_used.append({
-                    'texture': ch['texture'],
-                    'start': start_index,
-                    'count': end_index - start_index
-                })
-                start_index = end_index
+            [vertices.extend(e) for e in _vertices]
 
-            x += ch['advance'] * scale
+            # 记录这个字符使用的纹理和顶点范围
+            end_index = len(vertices) // 4  # 每个顶点4个float
+            textures_used.append({
+                'texture': ch['texture'],
+                'start': start_index,
+                'count': end_index - start_index
+            })
+            start_index = end_index
 
         if vertices:
             # 上传顶点数据
@@ -279,7 +295,6 @@ class TextRenderer(TextShader):
 
             # 按纹理分组绘制
             for texture_info in textures_used:
-                # print(texture_info)
                 glBindTexture(GL_TEXTURE_2D, texture_info['texture'])
                 glDrawArrays(
                     GL_TRIANGLES, texture_info['start'], texture_info['count'])
@@ -287,6 +302,27 @@ class TextRenderer(TextShader):
         glBindVertexArray(0)
         glBindTexture(GL_TEXTURE_2D, 0)
         return
+
+    def mono_to_grayscale(self, bitmap):
+        """将单色位图转换为灰度"""
+        width = bitmap.width
+        rows = bitmap.rows
+        pitch = bitmap.pitch
+
+        # 创建灰度数据数组
+        data = np.zeros((rows, width), dtype=np.ubyte)
+
+        for y in range(rows):
+            for x in range(width):
+                byte_index = y * pitch + x // 8
+                bit_index = 7 - (x % 8)  # FT 位图是 MSB 优先
+
+                if byte_index < len(bitmap.buffer):
+                    byte_val = bitmap.buffer[byte_index]
+                    bit_val = (byte_val >> bit_index) & 1
+                    data[y, x] = 255 if bit_val else 0
+
+        return data.flatten()
 
 # %% ---- 2025-10-09 ------------------------
 # Play ground

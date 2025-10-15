@@ -88,6 +88,9 @@ class GLFWWindow(CursorPosition):
         super().__init__()
         pass
 
+    def cleanup(self):
+        logger.info('Cleanup')
+
     def load_font(self, font_path: str, font_size: int = 48):
         self.text_renderer.load_font(font_path, font_size)
         self.font_path = font_path

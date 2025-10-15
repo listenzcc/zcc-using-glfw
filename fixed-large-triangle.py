@@ -63,7 +63,7 @@ def compile(vertices=vertices):
                           7 * 4, ctypes.c_void_p(3*4))
     glEnableVertexAttribArray(1)
 
-    # ? What is this for ?
+    # Unbind
     glBindBuffer(GL_ARRAY_BUFFER, 0)
     glBindVertexArray(0)
 
@@ -99,12 +99,13 @@ def main_render():
     glUseProgram(shader)
     glBindVertexArray(vao)
     glDrawArrays(GL_TRIANGLES, 0, 3)
+    glBindVertexArray(0)
 
     t = glfw.get_time()
 
     wnd.draw_text("Hello Modern OpenGL!",
                   math.sin(t), math.cos(t), 1.0, color=(1.0, 0.5, 0.2))
-    wnd.draw_text("高性能文本渲染", -0.5, 0.5, 1.0, color=(0.2, 0.8, 1.0))
+    wnd.draw_text("中文测试", -0.5, 0.5, 1.0, color=(0.2, 0.8, 1.0))
 
     return
 
@@ -122,6 +123,8 @@ shader, vao = compile()
 glfw.set_key_callback(wnd.window, key_callback)
 
 wnd.render_loop(main_render)
+
+wnd.cleanup()
 
 # %% ---- 2025-10-13 ------------------------
 # Pending
