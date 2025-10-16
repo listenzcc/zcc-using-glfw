@@ -106,16 +106,15 @@ def main_render():
     wnd.draw_text("Hello Modern OpenGL!",
                   math.sin(t), math.cos(t), 1.0, color=(1.0, 0.5, 0.2))
     wnd.draw_text("中文测试", -0.5, 0.5, 1.0, color=(0.2, 0.8, 1.0))
+    wnd.draw_text("中文测试", 0, 0, 1.0, color=(1.0, 1.0, 1.0))
 
     return
 
 
 # %% ---- 2025-10-13 ------------------------
 # Play ground
-
 wnd = GLFWWindow()
-# wnd.load_font('c:\\windows\\fonts\\stliti.ttf', FONT_SIZE)
-wnd.load_font('./resource/font/MTCORSVA.TTF')
+wnd.load_font('c:\\windows\\fonts\\stxinwei.ttf')
 wnd.init_window()
 
 shader, vao = compile()
