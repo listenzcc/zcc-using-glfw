@@ -108,6 +108,8 @@ def main_render():
     wnd.draw_text("中文测试", -0.5, 0.5, 1.0, color=(0.2, 0.8, 1.0))
     wnd.draw_text("中文测试", 0, 0, 1.0, color=(1.0, 1.0, 1.0))
 
+    wnd.draw_rect(0, 0.0, 0.2, 0.3, 0, 0.5)
+
     return
 
 

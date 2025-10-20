@@ -89,6 +89,10 @@ class TextShader:
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glBindVertexArray(0)
 
+        glUseProgram(self.shader_program)
+        glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "projection"),
+                           1, GL_FALSE, self.projection)
+
 
 class TextRenderer(TextShader):
     # I believe windows should have it.
@@ -202,9 +206,6 @@ class TextRenderer(TextShader):
         glUseProgram(self.shader_program)
         glUniform3f(glGetUniformLocation(self.shader_program, "textColor"),
                     color[0], color[1], color[2])
-
-        glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "projection"),
-                           1, GL_FALSE, self.projection)
 
         glActiveTexture(GL_TEXTURE0)
         glBindVertexArray(self.vao)

@@ -20,6 +20,7 @@ Functions:
 # Requirements and constants
 from .fps_ruler import FPSRuler
 from .text_render import TextRenderer
+from .triangle_render import TriangleRender
 from .color_transfer import ColorTransfer
 from .easy_import import *
 
@@ -82,6 +83,7 @@ class GLFWWindow(CursorPosition):
 
     # Addons
     text_renderer = TextRenderer()
+    triangle_render = TriangleRender()
     fps = FPSRuler()
 
     def __init__(self):
@@ -165,6 +167,7 @@ class GLFWWindow(CursorPosition):
 
         self.window = window
         self.text_renderer.init_shader(self.width, self.height)
+        self.triangle_render.init_shader(self.width, self.height)
 
         return window
 
@@ -222,12 +225,23 @@ class GLFWWindow(CursorPosition):
         logger.info('Rendering stops')
         return
 
-    def draw_rect(self, x, y, w, h, color=(1, 1, 1, 1)):
+    def draw_rect(self, x1, y1, x2, y2, x3, y3, color=(1, 1, 1, 1)):
         '''
         Suppose the x, y is the SW corner of the rectangle.
 
         :param x, y, w, h: (0, 1) position and (0, 1) scale.
         '''
+
+        x1 = int((x1+1) * 0.5 * self.width)
+        y1 = int((y1+1) * 0.5 * self.height)
+        x2 = int((x2+1) * 0.5 * self.width)
+        y2 = int((y2+1) * 0.5 * self.height)
+        x3 = int((x3+1) * 0.5 * self.width)
+        y3 = int((y3+1) * 0.5 * self.height)
+
+        self.triangle_render.render_triangle(x1, y1, x2, y2, x3, y3, color)
+
+        return
         raise DeprecationWarning('Not using instance mode anymore.')
 
         color = ColorTransfer(color).rgba
