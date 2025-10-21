@@ -225,12 +225,14 @@ class GLFWWindow(CursorPosition):
         logger.info('Rendering stops')
         return
 
-    def draw_rect(self, x1, y1, x2, y2, x3, y3, color=(1, 1, 1, 1)):
+    def draw_triangle(self, x1, y1, x2, y2, x3, y3, color=(1, 1, 1, 1), nPos=(0, 0, 1, 0, 0, 1)):
         '''
-        Suppose the x, y is the SW corner of the rectangle.
+        Draw a triangle by normalized device coordinates.
 
-        :param x, y, w, h: (0, 1) position and (0, 1) scale.
+        :param x1, y1, x2, y2, x3, y3: (-1, 1) position.
+        :param color: RGBA color or supports ColorTransfer.
         '''
+        color = ColorTransfer(color).rgba
 
         x1 = int((x1+1) * 0.5 * self.width)
         y1 = int((y1+1) * 0.5 * self.height)
@@ -239,28 +241,22 @@ class GLFWWindow(CursorPosition):
         x3 = int((x3+1) * 0.5 * self.width)
         y3 = int((y3+1) * 0.5 * self.height)
 
-        self.triangle_render.render_triangle(x1, y1, x2, y2, x3, y3, color)
+        self.triangle_render.render_triangle(
+            x1, y1, x2, y2, x3, y3, color, nPos)
 
         return
-        raise DeprecationWarning('Not using instance mode anymore.')
 
+    def draw_rect(self, x, y, w, h, color=(1, 1, 1, 1)):
+        '''
+        Suppose the x, y is the SW corner of the rectangle.
+
+        :param x, y, w, h: (0, 1) position and (0, 1) scale.
+        '''
         color = ColorTransfer(color).rgba
 
-        x = x * 2 - 1
-        y = y * 2 - 1
-        w *= 2
-        h *= 2
-
-        a = (x, y)
-        b = (x, y+h)
-        c = (x+w, y)
-        d = (x+w, y+h)
-
-        glBegin(GL_QUAD_STRIP)
-        for e in [a, b, c, d]:
-            glColor4f(*color)
-            glVertex2f(*e)
-        glEnd()
+        self.draw_triangle(x, y, x, y + h, x + w, y, color, (0, 0, 0, 1, 1, 0))
+        self.draw_triangle(x + w, y, x, y + h, x + w, y +
+                           h, color, (1, 0, 0, 1, 1, 1))
         return
 
     def draw_text(self, text, x, y, scale, anchor: TextAnchor = TextAnchor.BL, color=(1.0, 1.0, 1.0, 1.0)):

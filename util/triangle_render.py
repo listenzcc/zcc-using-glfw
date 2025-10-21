@@ -70,15 +70,19 @@ class TriangleShader:
         glBindVertexArray(self.vao)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
 
-        # 预分配缓冲区大小（6个顶点 * 4个float * 100个字符）
+        # 预分配缓冲区大小（6个顶点 * 4个float * 100个纹理）
         glBufferData(GL_ARRAY_BUFFER, 6 * 4 * 100 *
                      sizeof(GLfloat), None, GL_DYNAMIC_DRAW)
 
         # 设置顶点属性指针
         # 位置属性
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE,
-                              2 * sizeof(GLfloat), ctypes.c_void_p(0))
+                              4 * sizeof(GLfloat), ctypes.c_void_p(0))
         glEnableVertexAttribArray(0)
+
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE,
+                              4 * sizeof(GLfloat), ctypes.c_void_p(2 * sizeof(GLfloat)))
+        glEnableVertexAttribArray(1)
 
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glBindVertexArray(0)
@@ -92,7 +96,7 @@ class TriangleRender(TriangleShader):
     def __init__(self):
         super().__init__()
 
-    def render_triangle(self, x1, y1, x2, y2, x3, y3, color=(1.0, 1.0, 1.0, 1.0)):
+    def render_triangle(self, x1, y1, x2, y2, x3, y3, color=(1.0, 1.0, 1.0, 1.0), nPos=(0, 0, 1, 0, 0, 1)):
         glUseProgram(self.shader_program)
         glUniform4f(glGetUniformLocation(self.shader_program,
                     'uColor'), color[0], color[1], color[2], color[3])
@@ -100,7 +104,8 @@ class TriangleRender(TriangleShader):
         glActiveTexture(GL_TEXTURE0)
         glBindVertexArray(self.vao)
 
-        vertices_array = np.array([x1, y1, x2, y2, x3, y3], dtype=np.float32)
+        vertices_array = np.array(
+            [x1, y1, nPos[0], nPos[1], x2, y2, nPos[2], nPos[3], x3, y3, nPos[4], nPos[5]], dtype=np.float32)
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         glBufferSubData(GL_ARRAY_BUFFER, 0,
                         vertices_array.nbytes, vertices_array)
